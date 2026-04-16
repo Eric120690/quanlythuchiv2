@@ -11,23 +11,42 @@
     body { font-family: 'Segoe UI', system-ui, sans-serif; }
     .card { transition: all 0.3s ease; }
     .chart-container { position: relative; height: 260px; }
-    @media (min-width: 1024px) { 
-      .chart-container { height: 340px; } 
-    }
-    .stat-value {
-      font-size: 1.5rem; /* text-2xl */
-      line-height: 1.25;
-    }
-    .modal {
-      animation: modalPop 0.3s ease forwards;
-    }
+    @media (min-width: 1024px) { .chart-container { height: 340px; } }
+    .stat-value { font-size: 1.5rem; line-height: 1.25; }
+    .modal { animation: modalPop 0.3s ease forwards; }
     @keyframes modalPop {
       0% { opacity: 0; transform: scale(0.95); }
       100% { opacity: 1; transform: scale(1); }
     }
+    /* Loading spinner */
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid #e0e7ff;
+      border-top: 4px solid #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* Skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 12px;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    /* Delete button on hover */
+    .transaction-item:hover .delete-btn { opacity: 1; }
+    .delete-btn { opacity: 0; transition: opacity 0.2s; }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen pb-20">
+
+<!-- LOADING OVERLAY -->
+<div id="loadingOverlay" class="fixed inset-0 bg-white/90 flex flex-col items-center justify-center z-[99999]">
+  <div class="spinner mb-4"></div>
+  <p class="text-gray-500 text-sm font-medium">Đang tải dữ liệu...</p>
+</div>
 
 <div class="max-w-7xl mx-auto p-4 sm:p-6">
 
@@ -35,19 +54,22 @@
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
     <div>
       <h1 class="text-2xl sm:text-3xl font-bold text-indigo-700 flex items-center gap-3">
-        <i class="fa-solid fa-wallet"></i> 
+        <i class="fa-solid fa-wallet"></i>
         Chi Tiêu Cá Nhân
       </h1>
-      <p class="text-gray-500 text-sm">Tháng 4/2026 • Phân tích chi tiêu</p>
+      <p class="text-gray-500 text-sm flex items-center gap-2">
+        <span id="syncStatus" class="inline-flex items-center gap-1 text-emerald-600 font-medium">
+          <i class="fa-solid fa-cloud-arrow-up text-xs"></i> Đồng bộ Firebase
+        </span>
+        • Phân tích chi tiêu
+      </p>
     </div>
-    
+
     <div class="flex gap-3">
       <select id="filterMonth" class="bg-white border border-gray-300 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 w-full sm:w-auto">
         <option value="">Tất cả thời gian</option>
-        <option value="2026-04" selected>Tháng 4/2026</option>
-        <option value="2026-03">Tháng 3/2026</option>
       </select>
-      <button onclick="resetFilters()" 
+      <button onclick="resetFilters()"
               class="bg-white border border-gray-300 hover:bg-gray-100 px-5 py-3 rounded-2xl flex items-center gap-2 text-sm whitespace-nowrap">
         <i class="fa-solid fa-rotate"></i>
         <span class="hidden sm:inline">Đặt lại</span>
@@ -55,118 +77,97 @@
     </div>
   </div>
 
-  <!-- Thống kê tóm tắt - 4 mục chữ bằng nhau -->
+  <!-- Thống kê tóm tắt -->
   <div class="grid grid-cols-2 gap-4 mb-8">
-    <!-- Dòng 1 -->
     <div class="bg-white rounded-3xl p-5 card shadow-sm border border-gray-100">
       <p class="text-xs text-gray-500">Tổng thu</p>
-      <p id="totalIncome" class="stat-value font-semibold text-emerald-600 mt-2">13.600.000 ₫</p>
+      <p id="totalIncome" class="stat-value font-semibold text-emerald-600 mt-2">—</p>
     </div>
     <div class="bg-white rounded-3xl p-5 card shadow-sm border border-gray-100">
       <p class="text-xs text-gray-500">Tổng chi</p>
-      <p id="totalExpense" class="stat-value font-semibold text-rose-600 mt-2">12.344.000 ₫</p>
+      <p id="totalExpense" class="stat-value font-semibold text-rose-600 mt-2">—</p>
     </div>
-
-    <!-- Dòng 2 - Ngang hàng -->
     <div class="bg-white rounded-3xl p-5 card shadow-sm border border-gray-100">
       <p class="text-xs text-gray-500">Số dư (Thu - Chi)</p>
-      <p id="netBalance" class="stat-value font-semibold text-indigo-700 mt-2">1.256.000 ₫</p>
+      <p id="netBalance" class="stat-value font-semibold text-indigo-700 mt-2">—</p>
     </div>
     <div class="bg-white rounded-3xl p-5 card shadow-sm border border-gray-100">
       <p class="text-xs text-gray-500">Số giao dịch</p>
-      <p id="transactionCount" class="stat-value font-semibold text-gray-700 mt-2">30</p>
+      <p id="transactionCount" class="stat-value font-semibold text-gray-700 mt-2">—</p>
     </div>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <!-- Pie Chart -->
     <div class="bg-white rounded-3xl p-6 card shadow-sm">
       <h2 class="text-lg font-semibold mb-5 flex items-center gap-2">
-        <i class="fa-solid fa-chart-pie text-indigo-600"></i> 
+        <i class="fa-solid fa-chart-pie text-indigo-600"></i>
         Phân bổ chi tiêu
       </h2>
-      <div class="chart-container">
-        <canvas id="pieChart"></canvas>
-      </div>
+      <div class="chart-container"><canvas id="pieChart"></canvas></div>
     </div>
-
-    <!-- Bar Chart -->
     <div class="bg-white rounded-3xl p-6 card shadow-sm">
       <h2 class="text-lg font-semibold mb-5 flex items-center gap-2">
-        <i class="fa-solid fa-chart-column text-indigo-600"></i> 
+        <i class="fa-solid fa-chart-column text-indigo-600"></i>
         Chi theo danh mục
       </h2>
-      <div class="chart-container">
-        <canvas id="barChart"></canvas>
-      </div>
+      <div class="chart-container"><canvas id="barChart"></canvas></div>
     </div>
-
-    <!-- Line Chart -->
     <div class="bg-white rounded-3xl p-6 card shadow-sm lg:col-span-2">
       <h2 class="text-lg font-semibold mb-5 flex items-center gap-2">
-        <i class="fa-solid fa-chart-line text-indigo-600"></i> 
+        <i class="fa-solid fa-chart-line text-indigo-600"></i>
         Xu hướng thu - chi
       </h2>
-      <div class="chart-container" style="height: 320px;">
-        <canvas id="lineChart"></canvas>
-      </div>
+      <div class="chart-container" style="height:320px;"><canvas id="lineChart"></canvas></div>
     </div>
   </div>
 
   <!-- Giao dịch gần đây -->
   <div class="mt-10 bg-white rounded-3xl p-6 card shadow-sm">
     <h2 class="text-lg font-semibold mb-6 flex items-center gap-2">
-      <i class="fa-solid fa-clock-rotate-left"></i> 
+      <i class="fa-solid fa-clock-rotate-left"></i>
       Giao dịch gần đây
+      <span id="transactionBadge" class="ml-auto text-xs bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full font-semibold"></span>
     </h2>
-    <div id="transactionList" class="space-y-4 max-h-[420px] overflow-y-auto pr-2">
-      <!-- JS render -->
-    </div>
+    <div id="transactionList" class="space-y-3 max-h-[460px] overflow-y-auto pr-1"></div>
   </div>
 </div>
 
 <!-- Nút FAB -->
-<button onclick="openAddModal()" 
+<button onclick="openAddModal()"
         class="fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center shadow-lg text-3xl z-50">
   <i class="fa-solid fa-plus"></i>
 </button>
 
 <!-- POPUP THÊM GIAO DỊCH -->
-<div id="addModal" onclick="if(event.target === this) closeModal()" 
+<div id="addModal" onclick="if(event.target===this)closeModal()"
      class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4">
-  <div onclick="event.stopImmediatePropagation()" 
+  <div onclick="event.stopImmediatePropagation()"
        class="modal bg-white rounded-3xl max-w-md w-full shadow-2xl">
-    
+
     <div class="flex justify-between items-center px-6 pt-6 pb-4 border-b">
       <h3 class="text-2xl font-semibold text-gray-800 flex items-center gap-2">
         <i class="fa-solid fa-plus-circle text-indigo-600"></i>
         Thêm giao dịch mới
       </h3>
-      <button onclick="closeModal()" 
+      <button onclick="closeModal()"
               class="w-9 h-9 flex items-center justify-center text-2xl text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-2xl">
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
 
     <form id="addForm" onsubmit="handleAddTransaction(event)" class="p-6 space-y-6">
-      
-      <!-- Loại giao dịch (toggle) -->
+
+      <!-- Loại giao dịch -->
       <div>
         <label class="text-xs uppercase tracking-widest text-gray-500 mb-3 block font-medium">Loại giao dịch</label>
         <div class="flex border border-gray-200 rounded-3xl p-1 bg-gray-50">
-          <!-- Chi tiêu -->
-          <button type="button" id="btnExpense"
-                  onclick="setType('expense')"
+          <button type="button" id="btnExpense" onclick="setType('expense')"
                   class="flex-1 py-4 text-base font-semibold rounded-3xl flex items-center justify-center gap-2 transition-all">
-            <i class="fa-solid fa-arrow-trend-down"></i>
-            <span>Chi tiêu</span>
+            <i class="fa-solid fa-arrow-trend-down"></i><span>Chi tiêu</span>
           </button>
-          <!-- Thu nhập -->
-          <button type="button" id="btnIncome"
-                  onclick="setType('income')"
+          <button type="button" id="btnIncome" onclick="setType('income')"
                   class="flex-1 py-4 text-base font-semibold rounded-3xl flex items-center justify-center gap-2 transition-all">
-            <i class="fa-solid fa-arrow-trend-up"></i>
-            <span>Thu nhập</span>
+            <i class="fa-solid fa-arrow-trend-up"></i><span>Thu nhập</span>
           </button>
         </div>
       </div>
@@ -175,7 +176,7 @@
       <div>
         <label class="text-xs uppercase tracking-widest text-gray-500 mb-3 block font-medium">Số tiền (₫)</label>
         <div class="relative">
-          <input type="number" id="amount" 
+          <input type="number" id="amount"
                  class="w-full text-4xl font-semibold py-5 px-6 bg-gray-50 border border-transparent focus:border-indigo-300 rounded-3xl outline-none text-center"
                  placeholder="0" min="1000" step="1000" required>
           <div class="absolute right-8 top-1/2 -translate-y-1/2 text-3xl text-gray-400 font-light">₫</div>
@@ -185,7 +186,7 @@
       <!-- Ngày -->
       <div>
         <label class="text-xs uppercase tracking-widest text-gray-500 mb-3 block font-medium">Ngày giao dịch</label>
-        <input type="date" id="date" 
+        <input type="date" id="date"
                class="w-full py-5 px-6 bg-gray-50 border border-transparent focus:border-indigo-300 rounded-3xl outline-none text-lg">
       </div>
 
@@ -194,98 +195,277 @@
         <label class="text-xs uppercase tracking-widest text-gray-500 mb-3 block font-medium">Danh mục</label>
         <select id="category" required
                 class="w-full py-5 px-6 bg-gray-50 border border-transparent focus:border-indigo-300 rounded-3xl outline-none text-lg">
-          <!-- JS populate -->
         </select>
       </div>
 
       <!-- Ghi chú -->
       <div>
         <label class="text-xs uppercase tracking-widest text-gray-500 mb-3 block font-medium">Ghi chú</label>
-        <input type="text" id="note" placeholder="Ví dụ: Ăn trưa cơm tấm" 
+        <input type="text" id="note" placeholder="Ví dụ: Ăn trưa cơm tấm"
                class="w-full py-5 px-6 bg-gray-50 border border-transparent focus:border-indigo-300 rounded-3xl outline-none text-lg">
       </div>
 
       <!-- Nút lưu -->
-      <button type="submit"
-              class="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-semibold text-xl py-6 rounded-3xl flex items-center justify-center gap-3">
-        <i class="fa-solid fa-check"></i>
-        LƯU GIAO DỊCH
+      <button type="submit" id="submitBtn"
+              class="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 transition-colors text-white font-semibold text-xl py-6 rounded-3xl flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed">
+        <i class="fa-solid fa-check" id="submitIcon"></i>
+        <span id="submitText">LƯU GIAO DỊCH</span>
       </button>
     </form>
   </div>
 </div>
 
+<!-- POPUP XÁC NHẬN XÓA -->
+<div id="deleteModal" onclick="if(event.target===this)closeDeleteModal()"
+     class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-[9999] p-4">
+  <div onclick="event.stopImmediatePropagation()"
+       class="modal bg-white rounded-3xl max-w-sm w-full shadow-2xl p-8 text-center">
+    <div class="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4">
+      <i class="fa-solid fa-trash-can text-rose-500 text-2xl"></i>
+    </div>
+    <h3 class="text-xl font-bold text-gray-800 mb-2">Xóa giao dịch?</h3>
+    <p class="text-gray-500 text-sm mb-6">Hành động này không thể hoàn tác. Giao dịch sẽ bị xóa vĩnh viễn khỏi Firebase.</p>
+    <div class="flex gap-3">
+      <button onclick="closeDeleteModal()" class="flex-1 py-4 bg-gray-100 hover:bg-gray-200 rounded-2xl font-semibold text-gray-700 transition-colors">Huỷ</button>
+      <button onclick="confirmDelete()" id="confirmDeleteBtn" class="flex-1 py-4 bg-rose-500 hover:bg-rose-600 rounded-2xl font-semibold text-white transition-colors flex items-center justify-center gap-2">
+        <i class="fa-solid fa-trash-can"></i> Xóa
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK (compat) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
 <script>
-// ==================== DỮ LIỆU (30 giao dịch) ====================
-let transactions = [
-  {id:1, date:"2026-04-01", type:"expense", amount:450000, category:"Ăn uống", note:"Ăn trưa cơm tấm"},
-  {id:2, date:"2026-04-02", type:"income", amount:12000000, category:"Lương", note:"Lương tháng 4"},
-  {id:3, date:"2026-04-03", type:"expense", amount:120000, category:"Di chuyển", note:"Xăng xe"},
-  {id:4, date:"2026-04-04", type:"expense", amount:890000, category:"Mua sắm", note:"Quần áo"},
-  {id:5, date:"2026-04-05", type:"expense", amount:350000, category:"Giải trí", note:"Netflix"},
-  {id:6, date:"2026-04-06", type:"expense", amount:650000, category:"Nhà cửa", note:"Tiền điện nước"},
-  {id:7, date:"2026-04-07", type:"expense", amount:180000, category:"Ăn uống", note:"Cafe sáng"},
-  {id:8, date:"2026-04-08", type:"expense", amount:450000, category:"Sức khỏe", note:"Khám bệnh"},
-  {id:9, date:"2026-04-09", type:"income", amount:800000, category:"Thưởng", note:"Thưởng dự án"},
-  {id:10, date:"2026-04-10", type:"expense", amount:220000, category:"Di chuyển", note:"Grab"},
-  {id:11, date:"2026-04-11", type:"expense", amount:1250000, category:"Mua sắm", note:"Phụ kiện điện thoại"},
-  {id:12, date:"2026-04-12", type:"expense", amount:320000, category:"Ăn uống", note:"Ăn tối nhà hàng"},
-  {id:13, date:"2026-04-13", type:"expense", amount:150000, category:"Giải trí", note:"Game"},
-  {id:14, date:"2026-04-14", type:"expense", amount:980000, category:"Nhà cửa", note:"Tiền nhà"},
-  {id:15, date:"2026-04-15", type:"expense", amount:280000, category:"Di chuyển", note:"Xe bus"},
-  {id:16, date:"2026-04-16", type:"expense", amount:420000, category:"Ăn uống", note:"Siêu thị"},
-  {id:17, date:"2026-04-17", type:"income", amount:500000, category:"Tiết kiệm", note:"Chuyển hũ"},
-  {id:18, date:"2026-04-18", type:"expense", amount:650000, category:"Giáo dục", note:"Khóa học"},
-  {id:19, date:"2026-04-19", type:"expense", amount:195000, category:"Sức khỏe", note:"Vitamin"},
-  {id:20, date:"2026-04-20", type:"expense", amount:380000, category:"Mua sắm", note:"Giày"},
-  {id:21, date:"2026-04-21", type:"expense", amount:270000, category:"Ăn uống", note:"Ăn sáng"},
-  {id:22, date:"2026-04-22", type:"expense", amount:110000, category:"Di chuyển", note:"Xăng"},
-  {id:23, date:"2026-04-23", type:"expense", amount:750000, category:"Giải trí", note:"Du lịch ngắn"},
-  {id:24, date:"2026-04-24", type:"expense", amount:430000, category:"Nhà cửa", note:"Sửa chữa"},
-  {id:25, date:"2026-04-25", type:"income", amount:300000, category:"Thưởng", note:"Tiền tip"},
-  {id:26, date:"2026-04-26", type:"expense", amount:520000, category:"Ăn uống", note:"Tiệc sinh nhật"},
-  {id:27, date:"2026-04-27", type:"expense", amount:89000, category:"Di chuyển", note:"Grab"},
-  {id:28, date:"2026-04-28", type:"expense", amount:1250000, category:"Mua sắm", note:"Phụ kiện laptop"},
-  {id:29, date:"2026-04-29", type:"expense", amount:310000, category:"Sức khỏe", note:"Nha khoa"},
-  {id:30, date:"2026-04-30", type:"expense", amount:680000, category:"Nhà cửa", note:"Internet"}
-];
+// ==================== FIREBASE INIT ====================
+const firebaseConfig = {
+  apiKey: "AIzaSyDihEgzT4jMauIqKxVNT04PbeJmA4ruGmM",
+  authDomain: "quanlythuchi-c5ec2.firebaseapp.com",
+  projectId: "quanlythuchi-c5ec2",
+  storageBucket: "quanlythuchi-c5ec2.firebasestorage.app",
+  messagingSenderId: "730148165651",
+  appId: "1:730148165651:web:3202649b82e984796a87e6"
+};
 
-// Danh mục theo loại
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const transactionsCol = db.collection("transactions");
+
+// ==================== STATE ====================
+let transactions = [];
+let currentType = "expense";
+let pendingDeleteId = null;
+let pieChart, barChart, lineChart;
+
 const expenseCategories = ["Ăn uống", "Di chuyển", "Mua sắm", "Giải trí", "Nhà cửa", "Sức khỏe", "Giáo dục"];
-const incomeCategories = ["Lương", "Thưởng", "Tiết kiệm"];
-
+const incomeCategories = ["Lương", "Thưởng", "Tiết kiệm", "Freelance", "Khác"];
 const categoryColors = {
   "Ăn uống": "#f59e0b", "Di chuyển": "#3b82f6", "Nhà cửa": "#8b5cf6", "Mua sắm": "#ec4899",
   "Giải trí": "#14b8a6", "Sức khỏe": "#ef4444", "Giáo dục": "#6366f1", "Lương": "#10b981",
-  "Thưởng": "#22c55e", "Tiết kiệm": "#eab308"
+  "Thưởng": "#22c55e", "Tiết kiệm": "#eab308", "Freelance": "#f97316", "Khác": "#64748b"
 };
 
-let pieChart, barChart, lineChart;
-let currentType = "expense";
+// ==================== FIRESTORE: ĐỌC REALTIME ====================
+function startRealtimeListener() {
+  transactionsCol.orderBy("date", "desc").onSnapshot(snapshot => {
+    transactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    updateMonthFilter();
+    updateAllCharts();
+    document.getElementById("loadingOverlay").style.display = "none";
+    setSyncStatus(true);
+  }, err => {
+    console.error("Firestore error:", err);
+    setSyncStatus(false);
+    document.getElementById("loadingOverlay").style.display = "none";
+    showToast("Lỗi kết nối Firebase!", "error");
+  });
+}
 
-// ==================== HÀM TÍNH TOÁN & HIỂN THỊ ====================
+function setSyncStatus(ok) {
+  const el = document.getElementById("syncStatus");
+  if (ok) {
+    el.innerHTML = `<i class="fa-solid fa-cloud-check text-xs"></i> Đã đồng bộ Firebase`;
+    el.className = "inline-flex items-center gap-1 text-emerald-600 font-medium";
+  } else {
+    el.innerHTML = `<i class="fa-solid fa-cloud-xmark text-xs"></i> Mất kết nối`;
+    el.className = "inline-flex items-center gap-1 text-rose-500 font-medium";
+  }
+}
+
+// ==================== FIRESTORE: THÊM ====================
+async function handleAddTransaction(e) {
+  e.preventDefault();
+
+  const amount = parseInt(document.getElementById("amount").value);
+  const date = document.getElementById("date").value;
+  const category = document.getElementById("category").value;
+  const note = document.getElementById("note").value.trim() || (currentType === "expense" ? "Chi tiêu mới" : "Thu nhập mới");
+
+  if (!date) { showToast("Vui lòng chọn ngày!", "error"); return; }
+
+  // Loading state
+  const btn = document.getElementById("submitBtn");
+  const icon = document.getElementById("submitIcon");
+  const text = document.getElementById("submitText");
+  btn.disabled = true;
+  icon.className = "fa-solid fa-spinner fa-spin";
+  text.textContent = "Đang lưu...";
+
+  try {
+    await transactionsCol.add({
+      date, type: currentType, amount, category, note,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    closeModal();
+    showToast("Đã thêm giao dịch thành công!", "success");
+  } catch (err) {
+    console.error(err);
+    showToast("Lỗi khi lưu: " + err.message, "error");
+  } finally {
+    btn.disabled = false;
+    icon.className = "fa-solid fa-check";
+    text.textContent = "LƯU GIAO DỊCH";
+  }
+}
+
+// ==================== FIRESTORE: XÓA ====================
+function openDeleteModal(id) {
+  pendingDeleteId = id;
+  document.getElementById("deleteModal").classList.remove("hidden");
+}
+
+function closeDeleteModal() {
+  pendingDeleteId = null;
+  document.getElementById("deleteModal").classList.add("hidden");
+}
+
+async function confirmDelete() {
+  if (!pendingDeleteId) return;
+  const btn = document.getElementById("confirmDeleteBtn");
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang xóa...`;
+  btn.disabled = true;
+  try {
+    await transactionsCol.doc(pendingDeleteId).delete();
+    closeDeleteModal();
+    showToast("Đã xóa giao dịch!", "success");
+  } catch (err) {
+    showToast("Lỗi khi xóa: " + err.message, "error");
+  } finally {
+    btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> Xóa`;
+    btn.disabled = false;
+  }
+}
+
+// ==================== UI HELPERS ====================
+function showToast(msg, type = "success") {
+  const bg = type === "success" ? "#10b981" : "#ef4444";
+  const icon = type === "success" ? "fa-check-circle" : "fa-circle-xmark";
+  const toast = document.createElement("div");
+  toast.style.cssText = `position:fixed;bottom:80px;right:24px;background:${bg};color:white;padding:12px 24px;border-radius:9999px;box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.2);font-weight:500;display:flex;align-items:center;gap:8px;z-index:99999;`;
+  toast.innerHTML = `<i class="fa-solid ${icon}"></i> ${msg}`;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.transition = "all 0.3s ease";
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(20px)";
+    setTimeout(() => toast.remove(), 300);
+  }, 2200);
+}
+
+function updateMonthFilter() {
+  const select = document.getElementById("filterMonth");
+  const current = select.value;
+  const months = [...new Set(transactions.map(t => t.date.substring(0, 7)))].sort().reverse();
+
+  const allOption = `<option value="">Tất cả thời gian</option>`;
+  const opts = months.map(m => {
+    const [y, mo] = m.split("-");
+    const label = `Tháng ${parseInt(mo)}/${y}`;
+    return `<option value="${m}" ${m === current ? 'selected' : ''}>${label}</option>`;
+  }).join("");
+  select.innerHTML = allOption + opts;
+}
+
+function openAddModal() {
+  document.getElementById("addModal").classList.remove("hidden");
+  const today = new Date().toISOString().split("T")[0];
+  document.getElementById("date").value = today;
+  document.getElementById("amount").value = "";
+  document.getElementById("note").value = "";
+  setType("expense");
+}
+
+function closeModal() {
+  document.getElementById("addModal").classList.add("hidden");
+}
+
+function setType(type) {
+  currentType = type;
+  const btnExpense = document.getElementById("btnExpense");
+  const btnIncome = document.getElementById("btnIncome");
+  if (type === "expense") {
+    btnExpense.classList.add("bg-rose-500", "text-white");
+    btnExpense.classList.remove("bg-white", "text-gray-700");
+    btnIncome.classList.add("bg-white", "text-gray-700");
+    btnIncome.classList.remove("bg-emerald-500", "text-white");
+  } else {
+    btnIncome.classList.add("bg-emerald-500", "text-white");
+    btnIncome.classList.remove("bg-white", "text-gray-700");
+    btnExpense.classList.add("bg-white", "text-gray-700");
+    btnExpense.classList.remove("bg-rose-500", "text-white");
+  }
+  populateCategories();
+}
+
+function populateCategories() {
+  const select = document.getElementById("category");
+  const cats = currentType === "expense" ? expenseCategories : incomeCategories;
+  select.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join("");
+}
+
+function resetFilters() {
+  document.getElementById("filterMonth").value = "";
+  updateAllCharts();
+}
+
+document.getElementById("filterMonth").addEventListener("change", updateAllCharts);
+
+// ==================== TÍNH TOÁN & HIỂN THỊ ====================
 function calculateSummary(filtered) {
   let totalIncome = 0, totalExpense = 0;
   filtered.forEach(t => t.type === "income" ? totalIncome += t.amount : totalExpense += t.amount);
   const net = totalIncome - totalExpense;
-
-  document.getElementById("totalIncome").textContent = totalIncome.toLocaleString('vi-VN') + " ₫";
-  document.getElementById("totalExpense").textContent = totalExpense.toLocaleString('vi-VN') + " ₫";
-  document.getElementById("netBalance").textContent = net.toLocaleString('vi-VN') + " ₫";
+  document.getElementById("totalIncome").textContent = totalIncome.toLocaleString("vi-VN") + " ₫";
+  document.getElementById("totalExpense").textContent = totalExpense.toLocaleString("vi-VN") + " ₫";
+  const netEl = document.getElementById("netBalance");
+  netEl.textContent = net.toLocaleString("vi-VN") + " ₫";
+  netEl.className = `stat-value font-semibold mt-2 ${net >= 0 ? 'text-indigo-700' : 'text-rose-600'}`;
   document.getElementById("transactionCount").textContent = filtered.length;
+  document.getElementById("transactionBadge").textContent = `${filtered.length} giao dịch`;
 }
 
 function renderTransactionList(filtered) {
   const container = document.getElementById("transactionList");
   container.innerHTML = "";
-  filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  filtered.forEach(t => {
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="text-center py-12 text-gray-400">
+      <i class="fa-solid fa-inbox text-5xl mb-4 block"></i>
+      <p class="text-lg font-medium">Chưa có giao dịch nào</p>
+      <p class="text-sm">Nhấn nút + để thêm giao dịch mới</p>
+    </div>`;
+    return;
+  }
+
+  const sorted = [...filtered].sort((a, b) => new Date(b.date) - new Date(a.date));
+  sorted.forEach(t => {
     const isIncome = t.type === "income";
     const div = document.createElement("div");
-    div.className = `flex items-center justify-between p-4 rounded-2xl border ${isIncome ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'}`;
+    div.className = `transaction-item flex items-center justify-between p-4 rounded-2xl border ${isIncome ? 'border-emerald-200 bg-emerald-50' : 'border-rose-100 bg-rose-50'}`;
     div.innerHTML = `
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 min-w-0">
         <div class="w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 ${isIncome ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}">
           <i class="fa-solid ${isIncome ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i>
         </div>
@@ -294,9 +474,16 @@ function renderTransactionList(filtered) {
           <p class="text-xs text-gray-500">${t.date} • ${t.category}</p>
         </div>
       </div>
-      <p class="font-semibold text-base ${isIncome ? 'text-emerald-600' : 'text-rose-600'} whitespace-nowrap">
-        ${isIncome ? '+' : '-'} ${t.amount.toLocaleString('vi-VN')} ₫
-      </p>
+      <div class="flex items-center gap-3 flex-shrink-0">
+        <p class="font-semibold text-base ${isIncome ? 'text-emerald-600' : 'text-rose-600'} whitespace-nowrap">
+          ${isIncome ? '+' : '-'} ${t.amount.toLocaleString('vi-VN')} ₫
+        </p>
+        <button onclick="openDeleteModal('${t.id}')"
+                class="delete-btn w-8 h-8 flex items-center justify-center text-gray-400 hover:text-rose-500 hover:bg-rose-100 rounded-xl transition-all"
+                title="Xóa giao dịch">
+          <i class="fa-solid fa-trash-can text-sm"></i>
+        </button>
+      </div>
     `;
     container.appendChild(div);
   });
@@ -304,7 +491,7 @@ function renderTransactionList(filtered) {
 
 function updateAllCharts() {
   const filter = document.getElementById("filterMonth").value;
-  let filtered = filter ? transactions.filter(t => t.date.startsWith(filter)) : transactions;
+  const filtered = filter ? transactions.filter(t => t.date && t.date.startsWith(filter)) : transactions;
 
   calculateSummary(filtered);
   renderTransactionList(filtered);
@@ -319,14 +506,13 @@ function updateAllCharts() {
     type: 'doughnut',
     data: {
       labels: Object.keys(categoryExpense),
-      datasets: [{ 
+      datasets: [{
         data: Object.values(categoryExpense),
         backgroundColor: Object.keys(categoryExpense).map(c => categoryColors[c] || "#64748b"),
-        borderWidth: 5,
-        borderColor: "#fff"
+        borderWidth: 5, borderColor: "#fff"
       }]
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }}
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
   });
 
   if (barChart) barChart.destroy();
@@ -334,19 +520,17 @@ function updateAllCharts() {
     type: 'bar',
     data: {
       labels: Object.keys(categoryExpense),
-      datasets: [{ 
-        label: 'Chi tiêu', 
-        data: Object.values(categoryExpense),
-        backgroundColor: "#6366f1",
-        borderRadius: 10
+      datasets: [{
+        label: 'Chi tiêu', data: Object.values(categoryExpense),
+        backgroundColor: "#6366f1", borderRadius: 10
       }]
     },
     options: { responsive: true, maintainAspectRatio: false }
   });
 
   const dates = [...new Set(filtered.map(t => t.date))].sort();
-  const incomeData = dates.map(d => filtered.filter(t => t.date === d && t.type === "income").reduce((s,t)=>s+t.amount,0));
-  const expenseData = dates.map(d => filtered.filter(t => t.date === d && t.type === "expense").reduce((s,t)=>s+t.amount,0));
+  const incomeData = dates.map(d => filtered.filter(t => t.date === d && t.type === "income").reduce((s, t) => s + t.amount, 0));
+  const expenseData = dates.map(d => filtered.filter(t => t.date === d && t.type === "expense").reduce((s, t) => s + t.amount, 0));
 
   if (lineChart) lineChart.destroy();
   lineChart = new Chart(document.getElementById("lineChart"), {
@@ -354,131 +538,19 @@ function updateAllCharts() {
     data: {
       labels: dates,
       datasets: [
-        { label: 'Thu nhập', data: incomeData, borderColor: "#10b981", tension: 0.4, borderWidth: 3.5 },
-        { label: 'Chi tiêu', data: expenseData, borderColor: "#ef4444", tension: 0.4, borderWidth: 3.5 }
+        { label: 'Thu nhập', data: incomeData, borderColor: "#10b981", tension: 0.4, borderWidth: 3.5, fill: false },
+        { label: 'Chi tiêu', data: expenseData, borderColor: "#ef4444", tension: 0.4, borderWidth: 3.5, fill: false }
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: { y: { ticks: { callback: v => (v/1000000).toFixed(1) + 'tr' }}}
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { ticks: { callback: v => (v / 1000000).toFixed(1) + 'tr' } } }
     }
   });
 }
 
-// ==================== POPUP THÊM GIAO DỊCH ====================
-function openAddModal() {
-  const modal = document.getElementById("addModal");
-  modal.classList.remove("hidden");
-  
-  // Đặt ngày mặc định là ngày hiện tại trong demo (16/04/2026)
-  const dateInput = document.getElementById("date");
-  dateInput.value = "2026-04-16";
-  
-  // Reset form
-  document.getElementById("amount").value = "";
-  document.getElementById("note").value = "";
-  
-  // Mặc định là chi tiêu
-  setType("expense");
-}
-
-function closeModal() {
-  const modal = document.getElementById("addModal");
-  modal.classList.add("hidden");
-}
-
-function setType(type) {
-  currentType = type;
-  
-  const btnExpense = document.getElementById("btnExpense");
-  const btnIncome = document.getElementById("btnIncome");
-  
-  if (type === "expense") {
-    // Chi tiêu active
-    btnExpense.classList.add("bg-rose-500", "text-white");
-    btnExpense.classList.remove("bg-white", "text-gray-700");
-    // Thu nhập inactive
-    btnIncome.classList.add("bg-white", "text-gray-700");
-    btnIncome.classList.remove("bg-emerald-500", "text-white");
-  } else {
-    // Thu nhập active
-    btnIncome.classList.add("bg-emerald-500", "text-white");
-    btnIncome.classList.remove("bg-white", "text-gray-700");
-    // Chi tiêu inactive
-    btnExpense.classList.add("bg-white", "text-gray-700");
-    btnExpense.classList.remove("bg-rose-500", "text-white");
-  }
-  
-  populateCategories();
-}
-
-function populateCategories() {
-  const select = document.getElementById("category");
-  select.innerHTML = "";
-  
-  const categories = currentType === "expense" ? expenseCategories : incomeCategories;
-  
-  categories.forEach(cat => {
-    const option = document.createElement("option");
-    option.value = cat;
-    option.textContent = cat;
-    select.appendChild(option);
-  });
-}
-
-function handleAddTransaction(e) {
-  e.preventDefault();
-  
-  const amount = parseInt(document.getElementById("amount").value);
-  const date = document.getElementById("date").value;
-  const category = document.getElementById("category").value;
-  const note = document.getElementById("note").value.trim() || (currentType === "expense" ? "Chi tiêu mới" : "Thu nhập mới");
-  
-  // Tạo ID mới
-  const newId = transactions.length > 0 ? Math.max(...transactions.map(t => t.id)) + 1 : 1;
-  
-  // Thêm giao dịch mới
-  transactions.unshift({
-    id: newId,
-    date: date,
-    type: currentType,
-    amount: amount,
-    category: category,
-    note: note
-  });
-  
-  // Đóng popup
-  closeModal();
-  
-  // Cập nhật toàn bộ giao diện
-  updateAllCharts();
-  
-  // Thông báo nhỏ
-  const toast = document.createElement("div");
-  toast.style.cssText = "position:fixed; bottom:80px; right:24px; background:#10b981; color:white; padding:12px 24px; border-radius:9999px; box-shadow:0 10px 15px -3px rgb(0 0 0 / 0.2); font-weight:500; display:flex; align-items:center; gap:8px; z-index:99999;";
-  toast.innerHTML = `<i class="fa-solid fa-check-circle"></i> Đã thêm giao dịch thành công!`;
-  document.body.appendChild(toast);
-  
-  setTimeout(() => {
-    toast.style.transition = "all 0.3s ease";
-    toast.style.opacity = "0";
-    toast.style.transform = "translateY(20px)";
-    setTimeout(() => toast.remove(), 300);
-  }, 2200);
-}
-
 // ==================== KHỞI CHẠY ====================
-function resetFilters() {
-  document.getElementById("filterMonth").value = "";
-  updateAllCharts();
-}
-
-document.getElementById("filterMonth").addEventListener("change", updateAllCharts);
-
-// Khởi tạo lần đầu
-updateAllCharts();
+startRealtimeListener();
 </script>
-
 </body>
 </html>
