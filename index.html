@@ -394,10 +394,25 @@
     <!-- TAB: USERS -->
     <div id="adminTab-users" class="hidden p-6">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-lg font-bold text-gray-800">Danh sách người dùng</h3>
+        <h3 class="text-lg font-bold text-gray-800">Quản lý người dùng & Phân quyền</h3>
         <button onclick="loadAdminUsers()" class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
           <i class="fa-solid fa-rotate"></i> Làm mới
         </button>
+      </div>
+      <!-- Permission legend -->
+      <div class="flex flex-wrap gap-3 mb-5 p-4 bg-white rounded-2xl border border-gray-100 text-xs">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-white px-2 py-0.5 rounded-full admin-badge">SUPER ADMIN</span>
+          <span class="text-gray-500">Quyền tối cao, không thể bị thu hồi</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-white bg-indigo-500 px-2 py-0.5 rounded-full">ADMIN</span>
+          <span class="text-gray-500">Được Super Admin cấp quyền, có thể bị thu hồi</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-gray-400 border border-gray-200 px-2 py-0.5 rounded-full">User</span>
+          <span class="text-gray-500">Tài khoản thường</span>
+        </div>
       </div>
       <div id="admin-fullUserList" class="space-y-3"></div>
     </div>
@@ -433,6 +448,29 @@
       <button onclick="saveCategoryModal()"
               class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 transition-colors">
         <i class="fa-solid fa-check"></i> <span id="catModalSaveText">Lưu danh mục</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL XÁC NHẬN PHÂN QUYỀN -->
+<div id="roleConfirmModal" onclick="if(event.target===this)closeRoleConfirmModal()"
+     class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-[9999999] p-4">
+  <div onclick="event.stopPropagation()" class="modal bg-white rounded-3xl max-w-sm w-full shadow-2xl p-7 text-center">
+    <div id="roleConfirmIcon" class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+      <i id="roleConfirmIconEl" class="text-2xl"></i>
+    </div>
+    <h3 id="roleConfirmTitle" class="text-xl font-bold text-gray-800 mb-2"></h3>
+    <p id="roleConfirmDesc" class="text-gray-500 text-sm mb-6 leading-relaxed"></p>
+    <div class="bg-gray-50 rounded-2xl px-4 py-3 mb-6 text-sm text-gray-700 font-medium" id="roleConfirmUser"></div>
+    <div class="flex gap-3">
+      <button onclick="closeRoleConfirmModal()"
+              class="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 rounded-2xl font-semibold text-gray-700 transition-colors">
+        Huỷ
+      </button>
+      <button onclick="executeToggleAdmin()" id="roleConfirmBtn"
+              class="flex-1 py-3.5 rounded-2xl font-semibold text-white transition-colors flex items-center justify-center gap-2">
+        Xác nhận
       </button>
     </div>
   </div>
@@ -503,10 +541,19 @@ function signOutUser() {
 }
 
 // Theo dõi trạng thái đăng nhập
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   if (user) {
     currentUser = user;
-    isAdmin = (user.email === ADMIN_EMAIL);
+    // Super admin hardcoded, hoặc check field isAdmin từ Firestore
+    const isSuperAdmin = (user.email === ADMIN_EMAIL);
+    // Đọc profile từ Firestore để kiểm tra quyền admin được cấp
+    let firestoreAdmin = false;
+    try {
+      const profileDoc = await db.collection("users").doc(user.uid).get();
+      if (profileDoc.exists) firestoreAdmin = profileDoc.data().isAdmin === true;
+    } catch(e) {}
+    isAdmin = isSuperAdmin || firestoreAdmin;
+
     document.getElementById("loginScreen").classList.add("hidden");
     const userInfo = document.getElementById("userInfo");
     userInfo.classList.remove("hidden");
@@ -994,26 +1041,73 @@ async function loadAdminUsers() {
       let inc = 0, exp = 0;
       txSnap.docs.forEach(d => { const t = d.data(); t.type === "income" ? inc += (t.amount||0) : exp += (t.amount||0); });
       const p = userDoc.data();
-      return { uid: userDoc.id, name: p.displayName||"", email: p.email||userDoc.id, txCount: txSnap.size, income: inc, expense: exp };
+      return {
+        uid: userDoc.id,
+        name: p.displayName || "",
+        email: p.email || userDoc.id,
+        photoURL: p.photoURL || "",
+        txCount: txSnap.size,
+        income: inc,
+        expense: exp,
+        isAdmin: p.isAdmin === true,
+        isSuperAdmin: p.email === ADMIN_EMAIL
+      };
     }));
-    rows.sort((a,b) => b.txCount - a.txCount);
-    container.innerHTML = rows.map(u => `
-      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+    rows.sort((a,b) => {
+      if (a.isSuperAdmin) return -1;
+      if (b.isSuperAdmin) return 1;
+      if (a.isAdmin && !b.isAdmin) return -1;
+      if (!a.isAdmin && b.isAdmin) return 1;
+      return b.txCount - a.txCount;
+    });
+    const isSuperAdmin = (currentUser?.email === ADMIN_EMAIL);
+    container.innerHTML = rows.map(u => {
+      const avatarLetter = u.name ? u.name[0].toUpperCase() : (u.email[0]||'?').toUpperCase();
+      const roleTag = u.isSuperAdmin
+        ? `<span class="text-xs font-bold text-white px-2 py-0.5 rounded-full admin-badge">SUPER ADMIN</span>`
+        : u.isAdmin
+          ? `<span class="text-xs font-bold text-white bg-indigo-500 px-2 py-0.5 rounded-full">ADMIN</span>`
+          : `<span class="text-xs text-gray-400 border border-gray-200 px-2 py-0.5 rounded-full">User</span>`;
+
+      // Only super admin can grant/revoke; cannot touch themselves or other super admins
+      const canToggle = isSuperAdmin && !u.isSuperAdmin && u.uid !== currentUser?.uid;
+      const toggleBtn = canToggle ? `
+        <button onclick="confirmToggleAdmin('${u.uid}', '${u.name || u.email}', ${u.isAdmin})"
+                class="flex-shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all
+                       ${u.isAdmin
+                         ? 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200'
+                         : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200'}">
+          <i class="fa-solid ${u.isAdmin ? 'fa-user-minus' : 'fa-user-shield'}"></i>
+          ${u.isAdmin ? 'Thu hồi Admin' : 'Cấp Admin'}
+        </button>` : '';
+
+      return `
+      <div class="bg-white rounded-2xl p-4 border ${u.isSuperAdmin ? 'border-amber-200 bg-amber-50/30' : u.isAdmin ? 'border-indigo-200 bg-indigo-50/20' : 'border-gray-100'} shadow-sm transition-all">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-2xl flex items-center justify-center text-white font-bold">
-            ${u.name ? u.name[0].toUpperCase() : u.email[0].toUpperCase()}
+          <div class="w-11 h-11 rounded-2xl flex items-center justify-center text-white font-bold text-base flex-shrink-0
+                      ${u.isSuperAdmin ? 'bg-gradient-to-br from-amber-400 to-rose-500' : u.isAdmin ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-gradient-to-br from-slate-400 to-slate-500'}">
+            ${u.photoURL
+              ? `<img src="${u.photoURL}" class="w-full h-full rounded-2xl object-cover" onerror="this.style.display='none';this.parentElement.textContent='${avatarLetter}'">`
+              : avatarLetter}
           </div>
           <div class="flex-1 min-w-0">
-            <p class="font-semibold text-gray-800">${u.name || "(Chưa đặt tên)"}</p>
-            <p class="text-xs text-gray-500 truncate">${u.email}</p>
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="font-semibold text-gray-800 text-sm">${u.name || "(Chưa đặt tên)"}</p>
+              ${roleTag}
+            </div>
+            <p class="text-xs text-gray-400 truncate mt-0.5">${u.email}</p>
           </div>
-          <div class="text-right text-sm">
-            <p class="font-bold text-gray-700">${u.txCount} giao dịch</p>
-            <p class="text-xs text-emerald-600">Thu: ${(u.income/1e6).toFixed(1)}tr ₫</p>
-            <p class="text-xs text-rose-500">Chi: ${(u.expense/1e6).toFixed(1)}tr ₫</p>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <div class="text-right text-xs hidden sm:block">
+              <p class="font-semibold text-gray-700">${u.txCount} GD</p>
+              <p class="text-emerald-600">+${(u.income/1e6).toFixed(1)}tr</p>
+              <p class="text-rose-500">-${(u.expense/1e6).toFixed(1)}tr</p>
+            </div>
+            ${toggleBtn}
           </div>
         </div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
   } catch(err) {
     console.error(err);
     container.innerHTML = `<p class="text-center text-rose-400 py-4">Lỗi: ${err.message}</p>`;
@@ -1158,6 +1252,62 @@ async function deleteCategory(type, index) {
     showToast("Đã xóa danh mục!", "success");
   } catch(err) {
     showToast("Lỗi: " + err.message, "error");
+  }
+}
+
+// ==================== ROLE MANAGEMENT ====================
+let pendingRoleChange = null; // { uid, name, revoke }
+
+function confirmToggleAdmin(uid, name, currentlyAdmin) {
+  pendingRoleChange = { uid, name, revoke: currentlyAdmin };
+  const iconBox = document.getElementById("roleConfirmIcon");
+  const iconEl = document.getElementById("roleConfirmIconEl");
+  const title = document.getElementById("roleConfirmTitle");
+  const desc = document.getElementById("roleConfirmDesc");
+  const userEl = document.getElementById("roleConfirmUser");
+  const btn = document.getElementById("roleConfirmBtn");
+
+  if (currentlyAdmin) {
+    // Revoke
+    iconBox.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-rose-100";
+    iconEl.className = "fa-solid fa-user-minus text-2xl text-rose-500";
+    title.textContent = "Thu hồi quyền Admin?";
+    desc.textContent = "Người dùng này sẽ mất toàn bộ quyền quản trị và trở về tài khoản thường.";
+    btn.className = "flex-1 py-3.5 rounded-2xl font-semibold text-white transition-colors flex items-center justify-center gap-2 bg-rose-500 hover:bg-rose-600";
+    btn.innerHTML = `<i class="fa-solid fa-user-minus"></i> Thu hồi quyền`;
+  } else {
+    // Grant
+    iconBox.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 bg-indigo-100";
+    iconEl.className = "fa-solid fa-user-shield text-2xl text-indigo-500";
+    title.textContent = "Cấp quyền Admin?";
+    desc.textContent = "Người dùng này sẽ có quyền truy cập trang quản trị, quản lý danh mục và xem báo cáo toàn hệ thống.";
+    btn.className = "flex-1 py-3.5 rounded-2xl font-semibold text-white transition-colors flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700";
+    btn.innerHTML = `<i class="fa-solid fa-user-shield"></i> Cấp quyền Admin`;
+  }
+  userEl.innerHTML = `<i class="fa-solid fa-user mr-2 text-gray-400"></i>${name}`;
+  document.getElementById("roleConfirmModal").classList.remove("hidden");
+}
+
+function closeRoleConfirmModal() {
+  pendingRoleChange = null;
+  document.getElementById("roleConfirmModal").classList.add("hidden");
+}
+
+async function executeToggleAdmin() {
+  if (!pendingRoleChange) return;
+  const { uid, name, revoke } = pendingRoleChange;
+  const btn = document.getElementById("roleConfirmBtn");
+  btn.disabled = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Đang xử lý...`;
+  try {
+    await db.collection("users").doc(uid).update({ isAdmin: !revoke });
+    closeRoleConfirmModal();
+    showToast(revoke ? `Đã thu hồi quyền Admin của ${name}` : `Đã cấp quyền Admin cho ${name}`, "success");
+    // Reload users list
+    loadAdminUsers();
+  } catch(err) {
+    showToast("Lỗi: " + err.message, "error");
+    btn.disabled = false;
   }
 }
 
