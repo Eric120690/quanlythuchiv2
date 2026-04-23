@@ -38,6 +38,13 @@
     /* Delete button on hover */
     .transaction-item:hover .delete-btn { opacity: 1; }
     .delete-btn { opacity: 0; transition: opacity 0.2s; }
+    /* Admin panel */
+    .admin-tab { transition: all 0.2s; }
+    .admin-tab.active { background: #6366f1; color: white; }
+    .admin-tab:not(.active) { background: white; color: #6b7280; }
+    .cat-item:hover .cat-actions { opacity: 1; }
+    .cat-actions { opacity: 0; transition: opacity 0.2s; }
+    .admin-badge { background: linear-gradient(135deg, #f59e0b, #ef4444); }
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen pb-20">
@@ -87,6 +94,11 @@
       <div id="userInfo" class="hidden items-center gap-2 bg-white border border-gray-200 rounded-2xl px-4 py-2">
         <img id="userAvatar" src="" alt="" class="w-7 h-7 rounded-full object-cover">
         <span id="userName" class="text-sm font-medium text-gray-700 hidden sm:block max-w-[120px] truncate"></span>
+        <!-- Admin badge -->
+        <span id="adminBadge" class="hidden text-xs font-bold text-white admin-badge px-2 py-0.5 rounded-full">ADMIN</span>
+        <button id="adminPanelBtn" onclick="openAdminPanel()" class="hidden ml-1 text-amber-500 hover:text-amber-600 transition-colors text-sm" title="Trang quản trị">
+          <i class="fa-solid fa-shield-halved"></i>
+        </button>
         <button onclick="signOutUser()" title="Đăng xuất"
                 class="ml-1 text-gray-400 hover:text-rose-500 transition-colors text-sm">
           <i class="fa-solid fa-right-from-bracket"></i>
@@ -261,6 +273,171 @@
   </div>
 </div>
 
+<!-- ==================== ADMIN PANEL ==================== -->
+<div id="adminPanel" class="hidden fixed inset-0 bg-black/70 flex items-start justify-center z-[99998] p-4 overflow-y-auto">
+  <div onclick="event.stopPropagation()" class="modal bg-gray-50 rounded-3xl w-full max-w-5xl shadow-2xl my-4">
+
+    <!-- Admin Header -->
+    <div class="flex items-center justify-between px-8 py-6 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-t-3xl">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+          <i class="fa-solid fa-shield-halved text-white text-lg"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-white">Trang Quản Trị</h2>
+          <p class="text-indigo-200 text-xs">Chi Tiêu Cá Nhân – Admin Dashboard</p>
+        </div>
+      </div>
+      <button onclick="closeAdminPanel()" class="w-9 h-9 bg-white/20 hover:bg-white/30 flex items-center justify-center rounded-2xl text-white transition-all">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Admin Tabs -->
+    <div class="flex gap-2 p-4 bg-white border-b border-gray-100">
+      <button onclick="switchAdminTab('dashboard')" id="tab-dashboard"
+              class="admin-tab active flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold">
+        <i class="fa-solid fa-chart-bar"></i> Dashboard
+      </button>
+      <button onclick="switchAdminTab('categories')" id="tab-categories"
+              class="admin-tab flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold">
+        <i class="fa-solid fa-tags"></i> Danh mục
+      </button>
+      <button onclick="switchAdminTab('users')" id="tab-users"
+              class="admin-tab flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold">
+        <i class="fa-solid fa-users"></i> Người dùng
+      </button>
+    </div>
+
+    <!-- TAB: DASHBOARD -->
+    <div id="adminTab-dashboard" class="p-6 space-y-6">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-lg font-bold text-gray-800">Tổng quan hệ thống</h3>
+        <button onclick="loadAdminDashboard()" class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+          <i class="fa-solid fa-rotate"></i> Làm mới
+        </button>
+      </div>
+      <!-- Stats cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <p class="text-xs text-gray-500 mb-1">Tổng người dùng</p>
+          <p id="admin-totalUsers" class="text-2xl font-bold text-indigo-600">—</p>
+        </div>
+        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <p class="text-xs text-gray-500 mb-1">Tổng giao dịch</p>
+          <p id="admin-totalTx" class="text-2xl font-bold text-gray-800">—</p>
+        </div>
+        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <p class="text-xs text-gray-500 mb-1">Tổng thu (toàn hệ thống)</p>
+          <p id="admin-totalIncome" class="text-2xl font-bold text-emerald-600">—</p>
+        </div>
+        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <p class="text-xs text-gray-500 mb-1">Tổng chi (toàn hệ thống)</p>
+          <p id="admin-totalExpense" class="text-2xl font-bold text-rose-600">—</p>
+        </div>
+      </div>
+
+      <!-- Top users table -->
+      <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+        <h4 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-trophy text-amber-500"></i> Top người dùng hoạt động
+        </h4>
+        <div id="admin-userTable" class="space-y-2">
+          <div class="text-center py-6 text-gray-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Đang tải...</div>
+        </div>
+      </div>
+
+      <!-- Category stats -->
+      <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+        <h4 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-chart-pie text-indigo-500"></i> Thống kê theo danh mục (toàn hệ thống)
+        </h4>
+        <div class="chart-container" style="height:240px;"><canvas id="adminCatChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TAB: CATEGORIES -->
+    <div id="adminTab-categories" class="hidden p-6 space-y-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- Chi tiêu categories -->
+        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="font-semibold text-gray-700 flex items-center gap-2">
+              <i class="fa-solid fa-arrow-trend-down text-rose-500"></i> Chi tiêu
+            </h4>
+            <button onclick="openAddCategoryModal('expense')"
+                    class="text-xs bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1 transition-all">
+              <i class="fa-solid fa-plus"></i> Thêm
+            </button>
+          </div>
+          <div id="catList-expense" class="space-y-2"></div>
+        </div>
+
+        <!-- Thu nhập categories -->
+        <div class="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="font-semibold text-gray-700 flex items-center gap-2">
+              <i class="fa-solid fa-arrow-trend-up text-emerald-500"></i> Thu nhập
+            </h4>
+            <button onclick="openAddCategoryModal('income')"
+                    class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-600 font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1 transition-all">
+              <i class="fa-solid fa-plus"></i> Thêm
+            </button>
+          </div>
+          <div id="catList-income" class="space-y-2"></div>
+        </div>
+      </div>
+      <p class="text-xs text-gray-400 text-center">* Danh mục lưu trên Firestore, áp dụng cho tất cả người dùng</p>
+    </div>
+
+    <!-- TAB: USERS -->
+    <div id="adminTab-users" class="hidden p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-gray-800">Danh sách người dùng</h3>
+        <button onclick="loadAdminUsers()" class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+          <i class="fa-solid fa-rotate"></i> Làm mới
+        </button>
+      </div>
+      <div id="admin-fullUserList" class="space-y-3"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL THÊM/SỬA DANH MỤC -->
+<div id="categoryModal" onclick="if(event.target===this)closeCategoryModal()"
+     class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-[999999] p-4">
+  <div onclick="event.stopPropagation()" class="modal bg-white rounded-3xl max-w-sm w-full shadow-2xl p-7">
+    <div class="flex items-center justify-between mb-6">
+      <h3 id="catModalTitle" class="text-xl font-bold text-gray-800">Thêm danh mục</h3>
+      <button onclick="closeCategoryModal()" class="w-9 h-9 flex items-center justify-center text-gray-400 hover:bg-gray-100 rounded-2xl">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="space-y-4">
+      <div>
+        <label class="text-xs uppercase tracking-widest text-gray-500 mb-2 block font-medium">Tên danh mục</label>
+        <input id="catNameInput" type="text" placeholder="Nhập tên danh mục..."
+               class="w-full py-4 px-5 bg-gray-50 border border-transparent focus:border-indigo-300 rounded-2xl outline-none text-base">
+      </div>
+      <div>
+        <label class="text-xs uppercase tracking-widest text-gray-500 mb-2 block font-medium">Màu sắc</label>
+        <div id="colorPicker" class="flex flex-wrap gap-2"></div>
+      </div>
+      <div>
+        <label class="text-xs uppercase tracking-widest text-gray-500 mb-2 block font-medium">Icon (Font Awesome)</label>
+        <input id="catIconInput" type="text" placeholder="fa-tag"
+               class="w-full py-4 px-5 bg-gray-50 border border-transparent focus:border-indigo-300 rounded-2xl outline-none text-base">
+      </div>
+      <button onclick="saveCategoryModal()"
+              class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 transition-colors">
+        <i class="fa-solid fa-check"></i> <span id="catModalSaveText">Lưu danh mục</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Firebase SDK (compat) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -289,8 +466,12 @@ let pieChart, barChart, lineChart;
 let currentUser = null;
 let unsubscribeListener = null;
 
-const expenseCategories = ["Ăn uống", "Di chuyển", "Mua sắm", "Giải trí", "Nhà cửa", "Sức khỏe", "Giáo dục"];
-const incomeCategories = ["Lương", "Thưởng", "Tiết kiệm", "Freelance", "Khác"];
+const ADMIN_EMAIL = "bttcongkien@gmail.com";
+let isAdmin = false;
+
+// Dynamic categories (loaded from Firestore or defaults)
+let expenseCategories = ["Ăn uống", "Di chuyển", "Mua sắm", "Giải trí", "Nhà cửa", "Sức khỏe", "Giáo dục"];
+let incomeCategories = ["Lương", "Thưởng", "Tiết kiệm", "Freelance", "Khác"];
 const categoryColors = {
   "Ăn uống": "#f59e0b", "Di chuyển": "#3b82f6", "Nhà cửa": "#8b5cf6", "Mua sắm": "#ec4899",
   "Giải trí": "#14b8a6", "Sức khỏe": "#ef4444", "Giáo dục": "#6366f1", "Lương": "#10b981",
@@ -325,26 +506,38 @@ function signOutUser() {
 auth.onAuthStateChanged(user => {
   if (user) {
     currentUser = user;
-    // Hiện app, ẩn login screen
+    isAdmin = (user.email === ADMIN_EMAIL);
     document.getElementById("loginScreen").classList.add("hidden");
-    // Hiện user info
     const userInfo = document.getElementById("userInfo");
     userInfo.classList.remove("hidden");
     userInfo.classList.add("flex");
     document.getElementById("userAvatar").src = user.photoURL || "";
     document.getElementById("userName").textContent = user.displayName || user.email;
-    // Bắt đầu lắng nghe dữ liệu của user này
-    startRealtimeListener();
+    // Show admin controls
+    if (isAdmin) {
+      document.getElementById("adminBadge").classList.remove("hidden");
+      document.getElementById("adminPanelBtn").classList.remove("hidden");
+    }
+    // Load categories from Firestore then start listener
+    loadCategoriesFromFirestore().then(() => startRealtimeListener());
+    // Save user profile for admin to read
+    db.collection("users").doc(user.uid).set({
+      email: user.email,
+      displayName: user.displayName || "",
+      photoURL: user.photoURL || "",
+      lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
   } else {
     currentUser = null;
-    // Dừng listener cũ nếu có
+    isAdmin = false;
     if (unsubscribeListener) { unsubscribeListener(); unsubscribeListener = null; }
     transactions = [];
-    // Ẩn app, hiện login screen
     document.getElementById("loginScreen").classList.remove("hidden");
     document.getElementById("loadingOverlay").style.display = "none";
     document.getElementById("userInfo").classList.add("hidden");
     document.getElementById("userInfo").classList.remove("flex");
+    document.getElementById("adminBadge").classList.add("hidden");
+    document.getElementById("adminPanelBtn").classList.add("hidden");
   }
 });
 
@@ -643,6 +836,329 @@ function updateAllCharts() {
       scales: { y: { ticks: { callback: v => (v / 1000000).toFixed(1) + 'tr' } } }
     }
   });
+}
+
+// ==================== CATEGORIES FROM FIRESTORE ====================
+async function loadCategoriesFromFirestore() {
+  try {
+    const doc = await db.collection("config").doc("categories").get();
+    if (doc.exists) {
+      const data = doc.data();
+      if (data.expense && data.expense.length) expenseCategories = data.expense.map(c => c.name || c);
+      if (data.income && data.income.length) incomeCategories = data.income.map(c => c.name || c);
+    }
+  } catch(e) { console.log("Using default categories", e); }
+}
+
+async function saveCategoriestoFirestore() {
+  const expData = expenseCategories.map(name => {
+    const existing = allCategoryObjects.expense?.find(c => (c.name||c) === name);
+    return existing || { name, color: categoryColors[name] || "#64748b", icon: "fa-tag" };
+  });
+  const incData = incomeCategories.map(name => {
+    const existing = allCategoryObjects.income?.find(c => (c.name||c) === name);
+    return existing || { name, color: categoryColors[name] || "#64748b", icon: "fa-tag" };
+  });
+  await db.collection("config").doc("categories").set({ expense: expData, income: incData });
+}
+
+let allCategoryObjects = { expense: [], income: [] };
+
+async function loadCategoryObjects() {
+  const doc = await db.collection("config").doc("categories").get();
+  if (doc.exists) {
+    const data = doc.data();
+    allCategoryObjects.expense = data.expense || [];
+    allCategoryObjects.income = data.income || [];
+  } else {
+    allCategoryObjects.expense = expenseCategories.map(name => ({ name, color: categoryColors[name] || "#64748b", icon: "fa-tag" }));
+    allCategoryObjects.income = incomeCategories.map(name => ({ name, color: categoryColors[name] || "#64748b", icon: "fa-tag" }));
+  }
+}
+
+// ==================== ADMIN PANEL ====================
+let adminCatChart = null;
+
+function openAdminPanel() {
+  if (!isAdmin) return;
+  document.getElementById("adminPanel").classList.remove("hidden");
+  switchAdminTab("dashboard");
+}
+
+function closeAdminPanel() {
+  document.getElementById("adminPanel").classList.add("hidden");
+}
+
+function switchAdminTab(tab) {
+  ["dashboard","categories","users"].forEach(t => {
+    document.getElementById(`adminTab-${t}`).classList.add("hidden");
+    document.getElementById(`tab-${t}`).classList.remove("active");
+  });
+  document.getElementById(`adminTab-${tab}`).classList.remove("hidden");
+  document.getElementById(`tab-${tab}`).classList.add("active");
+  if (tab === "dashboard") loadAdminDashboard();
+  if (tab === "categories") loadAdminCategories();
+  if (tab === "users") loadAdminUsers();
+}
+
+// ---- DASHBOARD ----
+async function loadAdminDashboard() {
+  document.getElementById("admin-totalUsers").textContent = "...";
+  document.getElementById("admin-totalTx").textContent = "...";
+  document.getElementById("admin-totalIncome").textContent = "...";
+  document.getElementById("admin-totalExpense").textContent = "...";
+  document.getElementById("admin-userTable").innerHTML = `<div class="text-center py-6 text-gray-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Đang tải...</div>`;
+
+  try {
+    // Fetch all users' sub-collections
+    const usersSnap = await db.collection("users").get();
+    const usersData = [];
+    let totalTx = 0, totalIncome = 0, totalExpense = 0;
+    const catTotals = {};
+
+    for (const userDoc of usersSnap.docs) {
+      const txSnap = await db.collection("users").doc(userDoc.id).collection("transactions").get();
+      let uIncome = 0, uExpense = 0;
+      txSnap.docs.forEach(d => {
+        const t = d.data();
+        if (t.type === "income") uIncome += (t.amount || 0);
+        else { uExpense += (t.amount || 0); catTotals[t.category] = (catTotals[t.category]||0) + (t.amount||0); }
+      });
+      totalTx += txSnap.size;
+      totalIncome += uIncome;
+      totalExpense += uExpense;
+      const profile = userDoc.data();
+      usersData.push({ uid: userDoc.id, email: profile.email || userDoc.id, name: profile.displayName || "", photoURL: profile.photoURL || "", txCount: txSnap.size, income: uIncome, expense: uExpense });
+    }
+
+    document.getElementById("admin-totalUsers").textContent = usersSnap.size;
+    document.getElementById("admin-totalTx").textContent = totalTx.toLocaleString("vi-VN");
+    document.getElementById("admin-totalIncome").textContent = (totalIncome/1e6).toFixed(1) + "tr ₫";
+    document.getElementById("admin-totalExpense").textContent = (totalExpense/1e6).toFixed(1) + "tr ₫";
+
+    // User table (top 8 by tx count)
+    const top = [...usersData].sort((a,b) => b.txCount - a.txCount).slice(0, 8);
+    const tableEl = document.getElementById("admin-userTable");
+    if (top.length === 0) {
+      tableEl.innerHTML = `<p class="text-center text-gray-400 py-4">Chưa có dữ liệu</p>`;
+    } else {
+      tableEl.innerHTML = top.map((u, i) => `
+        <div class="flex items-center gap-3 p-3 rounded-2xl hover:bg-gray-50 transition-all">
+          <span class="text-xs font-bold text-gray-400 w-5">${i+1}</span>
+          <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 font-bold text-sm flex-shrink-0">
+            ${u.name ? u.name[0].toUpperCase() : '?'}
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-800 truncate">${u.name || u.email}</p>
+            <p class="text-xs text-gray-400 truncate">${u.email}</p>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <p class="text-sm font-semibold text-gray-700">${u.txCount} GD</p>
+            <p class="text-xs text-emerald-600">+${(u.income/1e6).toFixed(1)}tr</p>
+          </div>
+        </div>`).join("");
+    }
+
+    // Category chart
+    if (adminCatChart) adminCatChart.destroy();
+    const catLabels = Object.keys(catTotals);
+    const catVals = Object.values(catTotals);
+    if (catLabels.length > 0) {
+      adminCatChart = new Chart(document.getElementById("adminCatChart"), {
+        type: 'bar',
+        data: {
+          labels: catLabels,
+          datasets: [{ label: 'Chi tiêu (₫)', data: catVals,
+            backgroundColor: catLabels.map(c => categoryColors[c] || "#6366f1"), borderRadius: 8 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+          scales: { y: { ticks: { callback: v => (v/1e6).toFixed(1)+'tr' } } } }
+      });
+    }
+
+  } catch(err) {
+    console.error(err);
+    showToast("Lỗi tải dữ liệu admin: " + err.message, "error");
+  }
+}
+
+// ---- USERS FULL ----
+async function loadAdminUsers() {
+  const container = document.getElementById("admin-fullUserList");
+  container.innerHTML = `<div class="text-center py-8 text-gray-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Đang tải...</div>`;
+  try {
+    const usersSnap = await db.collection("users").get();
+    if (usersSnap.empty) { container.innerHTML = `<p class="text-center text-gray-400 py-8">Chưa có người dùng nào.</p>`; return; }
+    const rows = await Promise.all(usersSnap.docs.map(async userDoc => {
+      const txSnap = await db.collection("users").doc(userDoc.id).collection("transactions").get();
+      let inc = 0, exp = 0;
+      txSnap.docs.forEach(d => { const t = d.data(); t.type === "income" ? inc += (t.amount||0) : exp += (t.amount||0); });
+      const p = userDoc.data();
+      return { uid: userDoc.id, name: p.displayName||"", email: p.email||userDoc.id, txCount: txSnap.size, income: inc, expense: exp };
+    }));
+    rows.sort((a,b) => b.txCount - a.txCount);
+    container.innerHTML = rows.map(u => `
+      <div class="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-2xl flex items-center justify-center text-white font-bold">
+            ${u.name ? u.name[0].toUpperCase() : u.email[0].toUpperCase()}
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-gray-800">${u.name || "(Chưa đặt tên)"}</p>
+            <p class="text-xs text-gray-500 truncate">${u.email}</p>
+          </div>
+          <div class="text-right text-sm">
+            <p class="font-bold text-gray-700">${u.txCount} giao dịch</p>
+            <p class="text-xs text-emerald-600">Thu: ${(u.income/1e6).toFixed(1)}tr ₫</p>
+            <p class="text-xs text-rose-500">Chi: ${(u.expense/1e6).toFixed(1)}tr ₫</p>
+          </div>
+        </div>
+      </div>`).join("");
+  } catch(err) {
+    console.error(err);
+    container.innerHTML = `<p class="text-center text-rose-400 py-4">Lỗi: ${err.message}</p>`;
+  }
+}
+
+// ---- CATEGORIES MANAGEMENT ----
+async function loadAdminCategories() {
+  await loadCategoryObjects();
+  renderCategoryList("expense");
+  renderCategoryList("income");
+}
+
+function renderCategoryList(type) {
+  const items = allCategoryObjects[type];
+  const container = document.getElementById(`catList-${type}`);
+  if (!items || items.length === 0) {
+    container.innerHTML = `<p class="text-gray-400 text-sm py-2 text-center">Chưa có danh mục</p>`;
+    return;
+  }
+  container.innerHTML = items.map((cat, i) => {
+    const name = cat.name || cat;
+    const color = cat.color || categoryColors[name] || "#64748b";
+    const icon = cat.icon || "fa-tag";
+    return `<div class="cat-item flex items-center gap-3 p-3 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all">
+      <div class="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style="background:${color}22;">
+        <i class="fa-solid ${icon} text-sm" style="color:${color}"></i>
+      </div>
+      <span class="flex-1 text-sm font-medium text-gray-800">${name}</span>
+      <div class="cat-actions flex gap-1">
+        <button onclick="openEditCategoryModal('${type}', ${i})"
+                class="w-7 h-7 flex items-center justify-center text-indigo-400 hover:bg-indigo-100 rounded-lg text-xs transition-all" title="Sửa">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+        <button onclick="deleteCategory('${type}', ${i})"
+                class="w-7 h-7 flex items-center justify-center text-rose-400 hover:bg-rose-100 rounded-lg text-xs transition-all" title="Xóa">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// Color palette for category picker
+const COLOR_PALETTE = ["#f59e0b","#ef4444","#10b981","#3b82f6","#8b5cf6","#ec4899","#14b8a6","#f97316","#6366f1","#22c55e","#eab308","#64748b","#0ea5e9","#a855f7","#84cc16"];
+
+let catModalMode = "add"; // "add" | "edit"
+let catModalType = "expense";
+let catModalEditIndex = -1;
+let selectedColor = COLOR_PALETTE[0];
+
+function renderColorPicker() {
+  const container = document.getElementById("colorPicker");
+  container.innerHTML = COLOR_PALETTE.map(c => `
+    <button type="button" onclick="selectColor('${c}')" id="cpBtn-${c.replace('#','')}"
+            class="w-7 h-7 rounded-xl border-2 transition-all ${selectedColor===c ? 'border-gray-800 scale-110' : 'border-transparent'}"
+            style="background:${c}"></button>`).join("");
+}
+
+function selectColor(c) {
+  selectedColor = c;
+  renderColorPicker();
+}
+
+function openAddCategoryModal(type) {
+  catModalMode = "add";
+  catModalType = type;
+  selectedColor = COLOR_PALETTE[0];
+  document.getElementById("catModalTitle").textContent = "Thêm danh mục " + (type==="expense"?"chi tiêu":"thu nhập");
+  document.getElementById("catNameInput").value = "";
+  document.getElementById("catIconInput").value = "fa-tag";
+  document.getElementById("catModalSaveText").textContent = "Thêm danh mục";
+  renderColorPicker();
+  document.getElementById("categoryModal").classList.remove("hidden");
+}
+
+function openEditCategoryModal(type, index) {
+  catModalMode = "edit";
+  catModalType = type;
+  catModalEditIndex = index;
+  const cat = allCategoryObjects[type][index];
+  const name = cat.name || cat;
+  selectedColor = cat.color || categoryColors[name] || COLOR_PALETTE[0];
+  document.getElementById("catModalTitle").textContent = "Chỉnh sửa danh mục";
+  document.getElementById("catNameInput").value = name;
+  document.getElementById("catIconInput").value = cat.icon || "fa-tag";
+  document.getElementById("catModalSaveText").textContent = "Lưu thay đổi";
+  renderColorPicker();
+  document.getElementById("categoryModal").classList.remove("hidden");
+}
+
+function closeCategoryModal() {
+  document.getElementById("categoryModal").classList.add("hidden");
+}
+
+async function saveCategoryModal() {
+  const name = document.getElementById("catNameInput").value.trim();
+  const icon = document.getElementById("catIconInput").value.trim() || "fa-tag";
+  if (!name) { showToast("Vui lòng nhập tên danh mục!", "error"); return; }
+
+  const catObj = { name, color: selectedColor, icon };
+
+  if (catModalMode === "add") {
+    allCategoryObjects[catModalType].push(catObj);
+  } else {
+    allCategoryObjects[catModalType][catModalEditIndex] = catObj;
+  }
+
+  // Sync to arrays used by app
+  expenseCategories = allCategoryObjects.expense.map(c => c.name || c);
+  incomeCategories = allCategoryObjects.income.map(c => c.name || c);
+  // Update color map
+  allCategoryObjects.expense.forEach(c => { if(c.color) categoryColors[c.name] = c.color; });
+  allCategoryObjects.income.forEach(c => { if(c.color) categoryColors[c.name] = c.color; });
+
+  try {
+    await db.collection("config").doc("categories").set({
+      expense: allCategoryObjects.expense,
+      income: allCategoryObjects.income
+    });
+    closeCategoryModal();
+    renderCategoryList("expense");
+    renderCategoryList("income");
+    showToast(catModalMode === "add" ? "Đã thêm danh mục!" : "Đã cập nhật danh mục!", "success");
+  } catch(err) {
+    showToast("Lỗi lưu danh mục: " + err.message, "error");
+  }
+}
+
+async function deleteCategory(type, index) {
+  const name = (allCategoryObjects[type][index]?.name) || allCategoryObjects[type][index];
+  if (!confirm(`Xóa danh mục "${name}"?`)) return;
+  allCategoryObjects[type].splice(index, 1);
+  if (type === "expense") expenseCategories = allCategoryObjects.expense.map(c => c.name||c);
+  else incomeCategories = allCategoryObjects.income.map(c => c.name||c);
+  try {
+    await db.collection("config").doc("categories").set({
+      expense: allCategoryObjects.expense,
+      income: allCategoryObjects.income
+    });
+    renderCategoryList(type);
+    showToast("Đã xóa danh mục!", "success");
+  } catch(err) {
+    showToast("Lỗi: " + err.message, "error");
+  }
 }
 
 // ==================== KHỞI CHẠY ====================
